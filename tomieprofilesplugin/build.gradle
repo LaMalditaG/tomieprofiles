@@ -1,0 +1,42 @@
+plugins {
+    id 'java'
+    // id 'application'
+}
+
+def plugin_name = properties.get('plugin_name')
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+  mavenCentral()
+  maven {
+    url "https://hub.spigotmc.org/nexus/content/repositories/snapshots/"
+  }
+  maven {
+    name = 'papermc'
+    url = 'https://repo.papermc.io/repository/maven-public/'
+  }
+}
+
+repositories {
+  maven {
+    setName("elytrium-repo")
+    setUrl("https://maven.elytrium.net/repo/")
+  }
+}
+
+dependencies {
+  compileOnly("net.elytrium.limboapi:api:1.1.26")
+}
+
+dependencies {
+  compileOnly 'com.velocitypowered:velocity-api:3.4.0-SNAPSHOT'
+  annotationProcessor 'com.velocitypowered:velocity-api:3.4.0-SNAPSHOT'
+  implementation 'com.google.inject:guice:7.0.0'
+  implementation 'org.apache.commons:commons-lang3:3.17.0'
+  implementation 'io.papermc.paper:paper-api:1.21.5-R0.1-SNAPSHOT'
+}
