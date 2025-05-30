@@ -1,7 +1,5 @@
 package tomieprofiles;
 
-import java.io.IOException;
-import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HashMap;
@@ -9,17 +7,21 @@ import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 
-import com.google.gson.JsonObject;
 import com.velocitypowered.api.util.GameProfile;
 
+import de.exlll.configlib.Configuration;
+
 import org.apache.commons.lang3.StringUtils;
-import org.jetbrains.annotations.NotNull;
 
-public class MiniProfileGroup implements Serializable{
+@Configuration
+public class MiniProfileGroup {
 
-    static class MiniProfile implements Serializable{
-        UUID uuid;
-        transient boolean isConnected = false;
+    @Configuration
+    static class MiniProfile {
+        private UUID uuid;
+        transient private boolean isConnected = false;
+        public MiniProfile(){}
+
         MiniProfile(UUID uuid,boolean connected){
             this.uuid = uuid;
             isConnected = connected;
@@ -27,26 +29,27 @@ public class MiniProfileGroup implements Serializable{
         MiniProfile(UUID uuid){
             this.uuid = uuid;
         }
-        // static Object serialize(@NotNull final Object o) throws IOException {
-        //     final var json = new JsonObject();
-        //     MiniProfile miniProfile = (MiniProfile) o;
-        //     json.addProperty("uuid", miniProfile.uuid.toString());
-        //     return json;
-        // }
-    
-        // static MiniProfile deserialize(@NotNull final Object o) throws IOException {
-        //     final var json = (JsonObject) o;
-            
-        //     UUID uuid = UUID.fromString(json.get("uuid").getAsString());
-        //     return new MiniProfile(uuid);
-        // }
     }
 
-    UUID baseUuid;
-    Map<Integer,MiniProfile> childProfiles;
-    String username;
-    Logger logger;
-    int nextId = -1;
+    public MiniProfileGroup(){}
+
+    private UUID baseUuid;
+    private String username;
+    private int nextId = -1;
+    private Map<Integer,MiniProfile> childProfiles;
+    transient private Logger logger;
+
+    public void setBaseUuid(UUID uuid){
+        baseUuid = uuid;
+    }
+
+    public UUID getBaseUuid(){
+        return baseUuid;
+    }
+
+    public void setLogger(Logger logger){
+        this.logger = logger;
+    }
 
     public MiniProfileGroup(UUID id, String name, Logger logger){
         baseUuid = id;
@@ -55,22 +58,6 @@ public class MiniProfileGroup implements Serializable{
         childProfiles = new HashMap<>();
         childProfiles.put(0, new MiniProfile(id,true));
     }
-
-    // static Object serialize(@NotNull final Object o) throws IOException {
-    //     final var json = new JsonObject();
-    //     MiniProfileGroup miniProfile = (MiniProfileGroup) o;
-    //     json.addProperty("uuid", miniProfile.baseUuid.toString());
-    //     return json;
-    // }
-
-    // static MiniProfileGroup deserialize(@NotNull final Object o) throws IOException {
-    //     final var json = (JsonObject) o;
-        
-    //     UUID uuid = UUID.fromString(json.get("uuid").getAsString());
-    //     String name = json.get("name").getAsString();
-    //     Map<Integer,MiniProfile> childProfiles = Map.deserialize(json.getAsJsonObject("childProfiles"));
-    //     return new MiniProfileGroup(uuid);
-    // }
 
     public String getBaseUsername(){
         return username;
@@ -85,7 +72,7 @@ public class MiniProfileGroup implements Serializable{
         }
         return null;
     }
-    public boolean setNextId(int id){
+    public boolean setNextConnectionId(int id){
         if(childProfiles.containsKey(id)){
             nextId = id;
             return true;
@@ -118,7 +105,6 @@ public class MiniProfileGroup implements Serializable{
             return new UUID(mostSigBits, leastSigBits);
 
         } catch (Exception e) {
-            logger.error(e.getMessage(), e);
             return UUID.randomUUID();
         }
     }
@@ -127,7 +113,6 @@ public class MiniProfileGroup implements Serializable{
         for(var profile : childProfiles.values()){
             if(profile.uuid.equals(uuid)){
                 profile.isConnected = false;
-                logger.info("MiniProfile "+uuid + " disconnected");
             }
         }
     }
@@ -142,14 +127,15 @@ public class MiniProfileGroup implements Serializable{
     }
 
     public GameProfile createChildGameProfile(GameProfile profile) {
+        logger.info("Creating child profile");
         if(!profile.getName().equals(username) ) return null;
         if(!profile.getId().equals(baseUuid)) return null;
-
         String newName;
         UUID newUUID;
 
         int outId = -1;
         if(nextId>=0){
+            
             if(childProfiles.get(nextId).isConnected)
                 return null;
             outId = nextId;
@@ -160,6 +146,7 @@ public class MiniProfileGroup implements Serializable{
                 if(found==false&&!childProfiles.get(id).isConnected){
                     found = true;
                     outId = id;
+                    logger.info("id " + id + " " +childProfiles.get(id).isConnected);
                 }
             }
 
@@ -168,9 +155,6 @@ public class MiniProfileGroup implements Serializable{
             }
         }
 
-
-        if(outId == 0) return profile;
-
         newName = getUsername(outId);
         newUUID = generateUUIDFromName(newName + "$");
 
@@ -178,6 +162,8 @@ public class MiniProfileGroup implements Serializable{
             childProfiles.put(outId, new MiniProfile(newUUID,true));
         else
             childProfiles.get(outId).isConnected = true;
+
+        if(outId == 0) return profile;
 
         return new GameProfile(newUUID,newName,profile.getProperties());
     }

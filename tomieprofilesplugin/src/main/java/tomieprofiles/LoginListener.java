@@ -1,8 +1,5 @@
 package tomieprofiles;
 
-// import org.bukkit.event.Listener;
-
-
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
 import com.velocitypowered.api.event.player.GameProfileRequestEvent;
@@ -16,9 +13,8 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
+import tomieprofiles.config.TomieConfig;
 
-
-import java.util.UUID;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -41,18 +37,23 @@ public class LoginListener {
 
     @Subscribe(priority = 0)
     public void onPlayerChat(PlayerChatEvent playerChatEvent){
-        playerChatEvent.setResult(denied());
+        Player player = playerChatEvent.getPlayer();
         if(playerChatEvent.getPlayer().getCurrentServer().isPresent()){
-            Player player = playerChatEvent.getPlayer();
             RegisteredServer server = player.getCurrentServer().get().getServer();
-            String text = playerChatEvent.getMessage();
-            
-            Component msg = parseMessage( "<<player>> <message>", List.of(
-                new ChatTemplate("player", player.getUsername(), false),
-                new ChatTemplate("server", server.getServerInfo().getName(), false),
-                new ChatTemplate("message", text, true)
-            ));
-            server.sendMessage(msg);
+            TomieConfig.Server config = controller.getServerConfig(server.getServerInfo().getName());
+            if(config!=null&&config.getActive()&&config.getOverwriteMessages()){
+                logger.info("Rewritting message");
+                playerChatEvent.setResult(denied());
+                
+                String text = playerChatEvent.getMessage();
+                
+                Component msg = parseMessage( "<<player>> <message>", List.of(
+                    new ChatTemplate("player", player.getUsername(), false),
+                    new ChatTemplate("server", server.getServerInfo().getName(), false),
+                    new ChatTemplate("message", text, true)
+                ));
+                server.sendMessage(msg);
+            }
         }
     }
 
@@ -60,13 +61,6 @@ public class LoginListener {
     public void onDisconnect(DisconnectEvent event){
         controller.setProfileDisconnect(event.getPlayer().getUniqueId());
     }
-    // @Subscribe(priority = 0)
-    // public void onPlayerKicked(KickedFromServerEvent event){
-    //     TextComponent msg = Component.text().content("redirecting").build();
-    //     logger.info("Kicked");
-    //     KickedFromServerEvent.RedirectPlayer redirect = KickedFromServerEvent.RedirectPlayer.create(event.getServer(), msg);
-    //     event.setResult(redirect);
-    // }
 
     private Component parseMessage(String input, List<ChatTemplate> templates) {
         List<TagResolver.Single> list = new ArrayList<>();

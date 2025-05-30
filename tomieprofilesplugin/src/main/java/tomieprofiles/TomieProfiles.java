@@ -1,45 +1,25 @@
 package tomieprofiles;
 
 import tomieprofiles.command.SwapProfileCommand;
+import tomieprofiles.config.TomieConfig;
 
 import com.velocitypowered.api.command.CommandManager;
 import com.velocitypowered.api.command.CommandMeta;
 import com.velocitypowered.api.command.SimpleCommand;
 import com.velocitypowered.api.event.Subscribe;
-import com.velocitypowered.api.event.connection.PluginMessageEvent;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.google.inject.Inject;
 import com.velocitypowered.api.plugin.Plugin;
 import com.velocitypowered.api.plugin.annotation.DataDirectory;
 import com.velocitypowered.api.proxy.ProxyServer;
-import com.velocitypowered.api.proxy.ServerConnection;
-import com.velocitypowered.api.proxy.server.RegisteredServer;
 import com.velocitypowered.api.util.GameProfile;
-import com.velocitypowered.api.proxy.ServerConnection;
 
-import net.elytrium.limboapi.api.player.LimboPlayer;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.ComponentBuilder;
-import net.kyori.adventure.text.TextComponent;
+import de.exlll.configlib.YamlConfigurations;
 
-import org.apache.commons.lang3.StringUtils;
-import org.bukkit.Server;
-
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CancellationException;
 
 import org.slf4j.Logger;
 
@@ -54,6 +34,7 @@ public class TomieProfiles {
     private final Logger logger;
     private final Path dataDirectory;
     private final Path profileDataPath;
+    private final ConfigManager configManager;
 
     BaseProfileList profiles = new BaseProfileList();
 
@@ -62,15 +43,19 @@ public class TomieProfiles {
         this.server = server;
         this.logger = logger;
         this.dataDirectory = dataDirectory;
-        profileDataPath = this.dataDirectory.resolve("profileData.bin");
+        
+        profileDataPath = this.dataDirectory.resolve("profileData.yaml");
+        this.configManager = new ConfigManager(dataDirectory, logger);
 
         logger.info("TomieProfiles created");
-
-        loadData();
     }
 
     @Subscribe
     public void onProxyInitialize(ProxyInitializeEvent event){
+        Thread.currentThread().setContextClassLoader(this.getClass().getClassLoader());
+
+        loadData();
+
         CommandManager commandManager = server.getCommandManager();
         CommandMeta commandMeta = commandManager.metaBuilder("tomieswap")
             .aliases("profileswap")
@@ -80,12 +65,13 @@ public class TomieProfiles {
         SimpleCommand commandToRegister = new SwapProfileCommand(this);
 
         commandManager.register(commandMeta, commandToRegister);
+
+        server.getEventManager().register(this, new LoginListener(this, logger));
+
+        // Config
+        loadConfig();
     }
 
-    @Subscribe
-    public void onInitialize(ProxyInitializeEvent event){
-        server.getEventManager().register(this, new LoginListener(this, logger));
-    }
 
     public GameProfile asignProfile(GameProfile baseProfile){
         GameProfile out;
@@ -100,10 +86,6 @@ public class TomieProfiles {
         saveData();
         return out;
     }
-
-
-
-
 
     public UUID getUuidFromBase(UUID uuid,int id){
         if(id == 0) return uuid;        
@@ -122,28 +104,9 @@ public class TomieProfiles {
             logger.info("BaseProfile "+id+" is already in use for "+uuid);
             return CommandResult.IN_USE;
         }
-        profileGroup.setNextId(id);
+        profileGroup.setNextConnectionId(id);
         return CommandResult.OK;
     }
-
-    // public void swapProfiles(UUID uuid0, UUID uuid1){
-    //     logger.info("Swapping");
-    //     for(var player : server.getAllPlayers()){
-    //         if(player.getUniqueId().equals(uuid0)){
-    //             if(player.getCurrentServer().isPresent()){
-    //                 RegisteredServer gameServer = player.getCurrentServer().get().getServer();
-    //                 final TextComponent textComponent = Component.text().content("Swapping").build();
-    //                 for(var property : player.getGameProfile().getProperties()){
-    //                     logger.info(property.getName()+ " : " +property.getValue());
-                        
-    //                 }
-    //                 player.getGameProfile().getName();
-                    
-                    
-    //             }
-    //         }
-    //     }
-    // }
 
     public boolean isPlayerConnected(UUID uuid){
         logger.info(uuid.toString());
@@ -169,6 +132,7 @@ public class TomieProfiles {
     }
 
     public void saveData(){
+        logger.info("Saving data");
         if(!Files.isDirectory(dataDirectory)) {
             try{
                 Files.createDirectory(dataDirectory);
@@ -177,32 +141,42 @@ public class TomieProfiles {
                 return;
             }
         }
-        try {
-            FileOutputStream fileOut = new FileOutputStream(profileDataPath.toString());
-            
-            ObjectOutputStream out = new ObjectOutputStream(fileOut);
-            out.writeObject(profiles);
-            out.close();
-            fileOut.close();
-            System.out.println("Serialized data is saved");
-        } catch (IOException i) {
-            i.printStackTrace();
-        }
+
+        YamlConfigurations.save(profileDataPath, BaseProfileList.class, profiles);
     }
 
     public void loadData(){
         if(!Files.exists(profileDataPath)) return;
-        try {
-            FileInputStream fileIn = new FileInputStream(profileDataPath.toString());
-            ObjectInputStream in = new ObjectInputStream(fileIn);
-            profiles = (BaseProfileList) in.readObject();
-            in.close();
-            fileIn.close();
-        } catch (IOException i) {
-            i.printStackTrace();
-        } catch (ClassNotFoundException c) {
-            System.out.println("Profile class not found");
-            c.printStackTrace();
+        profiles = YamlConfigurations.load(profileDataPath, BaseProfileList.class);
+        profiles.updateLogger(logger);
+    }
+
+    public TomieConfig.Server getServerConfig(String servername){
+        var serversConfig = configManager.getConfig().getServers();
+
+        TomieConfig.Server out = null;
+        if(serversConfig == null) return out;
+        for(var serverConfig : serversConfig){
+            if(serverConfig.getServerName().equals(servername)){
+                out = serverConfig;
+            }
+        }
+        return out;
+    }
+
+    private void loadConfig(){
+        try{
+            configManager.initConfigIfNotExists();
+        }catch(Exception e){
+            logger.error("Error creating config", e);
+            logger.error("Server will shutdown");
+            this.server.shutdown();
+        }
+
+        try{
+            configManager.loadConfig();
+        }catch(Exception e){
+            logger.error("Error loading config", e);
         }
     }
 }

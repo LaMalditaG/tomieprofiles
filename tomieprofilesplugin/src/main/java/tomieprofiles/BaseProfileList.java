@@ -1,50 +1,42 @@
 package tomieprofiles;
 
-import java.io.IOException;
-import java.io.Serializable;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.ArrayList;
 import java.util.UUID;
 
-import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
 
-import com.google.gson.JsonObject;
+import de.exlll.configlib.Configuration;
 
-public class BaseProfileList implements Serializable{
+@Configuration
+public class BaseProfileList{
 
-    private final Map<UUID, MiniProfileGroup> profiles;
+    private ArrayList<MiniProfileGroup> profiles;
 
     public BaseProfileList(){
-        profiles = new HashMap<>();
-    }
-
-    public static Object serialize(@NotNull final Object o) throws IOException {
-        final var portal_block = (BaseProfileList) o;
-        final var json = new JsonObject();
-        // json.put("block", to_json());
-        // json.put("type", to_json());
-        return json;
-    }
-
-    public static BaseProfileList deserialize(@NotNull final Object o) throws IOException {
-        final var json = (JsonObject) o;
-
-        return new BaseProfileList();
+        profiles = new ArrayList<>();
     }
 
     public boolean containsBase(UUID uuid){
-        return profiles.containsKey(uuid);
+        boolean out = false;
+        for(var profile : profiles){
+            if(profile.getBaseUuid().equals(uuid)) out = true;
+        }
+        return out;
     }
 
     public MiniProfileGroup get(UUID uuid){
-        return profiles.get(uuid);
+        MiniProfileGroup out = null;
+        for(var profile : profiles){
+            if(profile.getBaseUuid().equals(uuid)) out = profile;
+        }
+        return out;
     }
 
     public UUID getBaseProfile(UUID uuid){
         UUID baseProfileUuid = null;
-        for(var profile : profiles.values()){
+        for(var profile : profiles){
             if(profile.hasChild(uuid))
-                baseProfileUuid = profile.baseUuid;
+                baseProfileUuid = profile.getBaseUuid();
             
         }
         return baseProfileUuid;
@@ -52,7 +44,7 @@ public class BaseProfileList implements Serializable{
 
     public MiniProfileGroup getProfileGroupFromChild(UUID uuid){
         MiniProfileGroup baseProfileUuid = null;
-        for(var profile : profiles.values()){
+        for(var profile : profiles){
             if(profile.hasChild(uuid))
                 baseProfileUuid = profile;
             
@@ -61,14 +53,23 @@ public class BaseProfileList implements Serializable{
     }
 
     public void put(UUID uuid, MiniProfileGroup profileGroup){
-        profiles.put(uuid, profileGroup);
+        // profiles.put(uuid, profileGroup);
+        profileGroup.setBaseUuid(uuid);
+        profiles.add(profileGroup);
+        
     }
 
     public void setProfileDisconnect(UUID uuid){
-        for(var profile : profiles.values()){
+        for(var profile : profiles){
             if(profile.hasChild(uuid)){
                 profile.setProfileDisconnect(uuid);
             }
+        }
+    }
+
+    public void updateLogger(Logger logger){
+        for(var miniProfileGroup : profiles){
+            miniProfileGroup.setLogger(logger);
         }
     }
 }
